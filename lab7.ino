@@ -1,6 +1,6 @@
 /***************************************************
  2021-03-29
- EC631 ESP32 Lab7
+ EC631 ESP32 Lab 7
  Board : "NodeMCU-32s"
  ****************************************************/
 #include <WiFi.h>
@@ -9,6 +9,8 @@
 #define LEDBLUE 2
 const char* ssid     = "ece631Lab";
 const char* password = "esp32IOT!";
+//const char* ssid     = "NETGEAR74";
+//const char* password = "greenlotus261";
 unsigned long LEDMillis;
 const int NUMELEMENTS = 5;
 String distPayload = "";
@@ -59,6 +61,7 @@ void reconnect() {
     // Attempt to connect
     if (client.connect("cody598")) {
       Serial.println("connected");
+      client.subscribe("/ece631/Lab5/LED/Action/");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -69,28 +72,25 @@ void reconnect() {
   }
 }
 
-void isr()
-{
+void isr(){
  //Serial.println("test");
-  if(digitalRead(22) == HIGH) 
-  {
-    highTime = micros();
+if(digitalRead(22) == HIGH){
+  highTime = micros();
   }
-  else if(digitalRead(22) == LOW) 
-  {
-    lowTime = micros();
+else if(digitalRead(22) == LOW){
+  lowTime = micros();
   }
 
-  width = lowTime - highTime;
+ width = lowTime - highTime;
  
-  distance =  ((width / 1000000) * 13503.9) / 2;
+ distance =  ((width / 1000000) * 13503.9) / 2;
 }
 
 double sum(double* arr[], int n){
  double sum = 0;
 
  for(int i = 0; i < n; i++){
-  sum = sum + *arr[i]; 
+ sum = sum + *arr[i]; 
  }
 }
 
@@ -133,12 +133,11 @@ void setup() {
  digitalWrite(LEDBLUE, LOW);
  LEDState = 0;
  Serial.setTimeout(100);//0.1 second timeout
- Serial.println("ESP32 Lab 7");
+ Serial.println("ESP32 Lab 5");
  Count = 0;
  LEDMillis = millis();
 }
-void loop() 
-{
+void loop() {
 
  movingArray[samples] = distance;
  samples++;
@@ -149,30 +148,71 @@ void loop()
  if(samples >= NUMELEMENTS)
  samples = 0;
 
- for(int i = 0; i < avgNum; i++)
- {
-   sendDist = sendDist + movingArray[i];
+ for(int i = 0; i < avgNum; i++){
+  sendDist = sendDist + movingArray[i];
  }
 
  sendDist = sendDist / avgNum;
  
- if(millis() - LEDMillis >= 1000)
- {
-   LEDMillis = millis();
+ if(millis() - LEDMillis >= 1000){
+ LEDMillis = millis();
 
-   temp["Distance"] = sendDist;
-   temp["Units"] = "Inches";
+ temp["Distance"] = sendDist;
+ temp["Units"] = "Inches";
 
-   serializeJson(temp, distPayload);
+ serializeJson(temp, distPayload);
 
-   distPayload.toCharArray(serial, 50);
+ distPayload.toCharArray(serial, 50);
 
-   Serial.print("Distance: ");
-   Serial.println(sendDist);
-   client.publish("/ece631/Lab7/Distance/SensorID/0", serial);
-   temp.clear();
-   distPayload = "";
+ Serial.print("Distance: ");
+ Serial.println(sendDist);
+ client.publish("/ece631/Lab7/Distance/SensorID/0", serial);
+ temp.clear();
+ distPayload = "";
  }
+ 
  client.loop();
+ if(doc["LED"] == "ON")
+ {
+  digitalWrite(LEDBLUE, HIGH);
+  client.publish("/ece631/Lab5/LED/State", "{\"LED\":\"ON\"}");
+ }
+ else if(doc["LED"] == "OFF")
+ {
+  digitalWrite(LEDBLUE,LOW);
+  client.publish("/ece631/Lab5/LED/State", "{\"LED\":\"OFF\"}");
+ }
+ if(doc["Flash"] >= 100 && doc["Flash"] <= 10000)
+ {
+  
+  flash = true;
+  rate = doc["Flash"];
+  
+  while(flash){
+  client.loop();
+  
+  if(doc["LED"] == "ON" || doc["LED"] == "OFF")
+  {
+  flash = false;
+  break;
+  }
+  
+  if(millis() - LEDMillis >= rate)
+  {
+    LEDMillis = millis();
+    LEDState = LEDState ^ HIGH;
+    digitalWrite(LEDBLUE, LEDState);
+    if(LEDState == HIGH)
+    {
+      client.publish("/ece631/Lab5/LED/State", "{\"LED\":\"ON\"}");
+      Serial.println("{\"LED\":\"ON\"}");
+    }
+    else
+    {
+      client.publish("/ece631/Lab5/LED/State", "{\"LED\":\"OFF\"}");
+      Serial.println("{\"LED\":\"OFF\"}");
+    }
+  }
+  }
+ } 
 }
-
